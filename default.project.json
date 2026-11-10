@@ -1,0 +1,57 @@
+{
+  "name": "TagRivals",
+  "servePort": 34873,
+  "servePlaceIds": [103953226550190],
+  "tree": {
+    "$className": "DataModel",
+    "Players": {
+      "$properties": { "CharacterAutoLoads": false }
+    },
+    "Workspace": {
+      "$properties": { "StreamingEnabled": false }
+    },
+    "Lighting": {
+      "Sky": {
+        "$className": "Sky",
+        "$properties": {
+          "SkyboxBk": "rbxassetid://119357248920976",
+          "SkyboxDn": "rbxassetid://134976793660406",
+          "SkyboxFt": "rbxassetid://110125101021218",
+          "SkyboxLf": "rbxassetid://114557315319042",
+          "SkyboxRt": "rbxassetid://129545489916926",
+          "SkyboxUp": "rbxassetid://88903185093172",
+          "CelestialBodiesShown": false,
+          "StarCount": 500
+        }
+      },
+      "Atmosphere": {
+        "$className": "Atmosphere",
+        "$properties": { "Density": 0 }
+      }
+    },
+    "ReplicatedStorage": {
+      "Shared": { "$path": "src/shared" },
+      "Remotes": {
+        "$className": "Folder",
+        "Dash": { "$className": "RemoteEvent" },
+        "Dev": { "$className": "RemoteEvent" },
+        "Tag": { "$className": "RemoteEvent" },
+        "Round": { "$className": "RemoteEvent" },
+        "Look": { "$className": "UnreliableRemoteEvent" }
+      }
+    },
+    "ServerScriptService": {
+      "Server": { "$path": "src/server" }
+    },
+    "StarterPlayer": {
+      "$properties": {
+        "EnableMouseLockOption": false,
+        "CharacterUseJumpPower": false,
+        "CharacterJumpHeight": 0
+      },
+      "StarterPlayerScripts": {
+        "Client": { "$path": "src/client" }
+      }
+    }
+  }
+}

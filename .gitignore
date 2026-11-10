@@ -1,0 +1,6 @@
+sourcemap.json
+*.rbxl
+*.rbxlx
+*.lock
+.claude/settings.local.json
+roblox.yml
