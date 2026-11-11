@@ -246,7 +246,7 @@ Config.Ui = table.freeze({
 -- the match, then cleanup and the victory screen.
 Config.Round = table.freeze({
 	MIN_PLAYERS = 2, -- a round needs a chaser and a runner (Claude's pick)
-	INTERMISSION = 15, -- owner
+	INTERMISSION = 8, -- s (owner 2026-11-11: "Keep waiting, shorter break"; was 15) so late joiners wait less
 	TELEPORT = 2, -- owner: the fade to black, the chaser picked in it, everyone spawned, frozen briefly
 	FADE_IN = 0.35, -- s to go black (Claude's pick)
 	FADE_OUT = 0.5, -- s to come back from black, ending as the match starts (Claude's pick)

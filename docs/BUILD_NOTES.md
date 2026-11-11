@@ -5,7 +5,7 @@ Everything built so far, in plain words, with where it lives. The owner's design
 today. Every number is in `src/shared/Config.luau`. Numbers marked "Claude's pick" are starting points to tune in
 playtests.
 
-Last updated: 2026-11-10.
+Last updated: 2026-11-11.
 
 ## Setup
 
@@ -151,12 +151,13 @@ Built 2026-11-09 (step 1 of the plan). Over and over:
 | Step | Time | What happens |
 | --- | --- | --- |
 | Waiting | until 2 players | Everyone waits on the lobby. The timer says WAITING FOR PLAYERS. |
-| Intermission | 15 s | On the lobby, watching the circle below. |
+| Intermission | 8 s | On the lobby, watching the circle below. (Owner 2026-11-11: "Keep waiting, shorter break"; was 15 s.) |
 | Teleport | 2 s | Every screen fades to black. In the dark the chaser is picked (never the same one twice in a row when there's a choice), the circle is sized, the starting speed set, and everyone gets a fresh body: runners spread evenly round the circle (78% of the way out, a little random), the chaser in the middle with the knife in hand. Your screen says YOU ARE THE CHASER! or RUN! and the chaser's name. Everyone is frozen until GO!. |
 | Match | 2 min | Tagged runners become chasers. Ends early when no runner is left. (Owner 2026-11-09: "change the game form 90 seconds to 2 minutes"; was 90 s.) |
 | Cleanup | 5 s | Everyone frozen, no more tagging, the victory screen. Then everyone goes back up to the lobby. |
 
-- Players who join mid-round wait on the lobby. If every chaser leaves, a runner is made the chaser; if fewer than 2
+- Players who join mid-round wait on the lobby (owner 2026-11-11 kept this, with a shorter break and the YOU'RE IN
+  NEXT ROUND! countdown, see Screens). If every chaser leaves, a runner is made the chaser; if fewer than 2
   are left, the round ends ("ROUND OVER").
 - **Phases** go by runners left (owner): phase 2 once a third of the starting runners are tagged, phase 3 at two
   thirds, Last Man Standing with 1 left. The timer's bar is slate grey, amber, orange (Claude's pick), then crimson.
@@ -420,6 +421,13 @@ take the Speed box"). **Everything moves** (owner: "make the Uis All animated", 
 - **The timer** (`RoundHud.luau`): top middle. A status line (INTERMISSION, THE SWARM IS LOOSE!, LAST MAN STANDING,
   ROUND OVER) with a glint, the big countdown on a striped indigo plate, and a thin bar under it that fills as time
   runs in the phase's colour. It bobs and leans, a new phase pops it, the last 10 s pulse red.
+- **YOU'RE IN NEXT ROUND!** (`NextRound.luau`; owner 2026-11-11, from the launch checklist: "Keep waiting, shorter
+  break"): first under the timer, on the lobby only. Gold words with a glint over a blue plastic tag, "STARTS IN
+  1:12". It shows during the break, and while a round is on that you're not in (you joined late); it hides during
+  the end screen (it would sit on it) and while the game waits for players. The time counts to the next fade to
+  black: during the break it's the timer's own clock; during a match it counts as if the match runs its full 2
+  minutes, so it drops when a match ends early. It pops in, bobs, the words rock, the tag ticks every second and the
+  last 5 s pulse gold. Layout and look are Claude's picks. Not tried in Studio yet (no place was open on 2026-11-11).
 - **The runner counter** (`RunnerCounter.luau`; owner 2026-11-10: "add a RUnner counter"): just right of the timer, for
   everyone while a round is on (it slides down at the teleport and back up after the end screen). A cyan RUNNERS line
   level with the timer's status line, a striped indigo plate like the timer's with a little cyan runner whose arms and
@@ -475,7 +483,7 @@ Checked in Studio's device simulator (iPhone 7, Galaxy A06, iPad) and on PC, wit
 - **One plan:** each fixed piece (timer, runner counter, coin counter, Dash button, dash bars, tag feed) says where it
   sits every frame, and the others keep clear of it: 8 pixels between pieces, 12 from the screen's sides. A phone is a
   screen whose short side is under 480 pixels. Roblox's safe area (notches) was already kept clear.
-- **Pop-ups stack:** the shrink countdown, the big call-outs (TAGGED!, GO!, DODGED!), the small ones (+1 TAG) and SPEED
+- **Pop-ups stack:** YOU'RE IN NEXT ROUND! (lobby only), the shrink countdown, the big call-outs (TAGGED!, GO!, DODGED!), the small ones (+1 TAG) and SPEED
   UP! (low, just above the dash bars) go down from under the timer in that order and never cover each other, the timer
   or the dash bars. On a phone they're drawn at 85% of the (already smaller) HUD. A long one (YOU ARE THE CHASER!)
   shrinks to stay clear of the tag feed and the coin counter, and so does one squeezed in under the others; one with no

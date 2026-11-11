@@ -27,9 +27,10 @@ local HudLayout = {}
 HudLayout.GAP = 8 -- screen pixels kept between two pieces
 HudLayout.EDGE = 12 -- screen pixels from the screen's sides
 
--- The pop-ups, top to bottom: the shrink countdown right under the timer, then the round's big call-outs (TAGGED!, GO!,
--- DODGED!), then its small ones (+1 TAG), then SPEED UP! low down just above the dash bars (owner 2026-11-10).
-local POP_ORDER = { "Shrink", "Middle", "Small", "Speed" }
+-- The pop-ups, top to bottom: YOU'RE IN NEXT ROUND! (only on the lobby, NextRound), the shrink countdown right under
+-- the timer, then the round's big call-outs (TAGGED!, GO!, DODGED!), then its small ones (+1 TAG), then SPEED UP! low
+-- down just above the dash bars (owner 2026-11-10).
+local POP_ORDER = { "Next", "Shrink", "Middle", "Small", "Speed" }
 
 local rests: { [string]: Rect } = {}
 local pops: { [string]: Rect } = {}
