@@ -1,7 +1,8 @@
 --!strict
--- The Studio test bots' animations, so they look like players instead of sliding about stiff (owner 2026-11-09: "can
--- u make the bots smarter"): the same idle, walk and sprint as a player's body, blended by speed and played faster as
--- they run faster; a dash animation on every dash; and for a chaser bot, the knife hold, and a slash when it tags.
+-- The bots' animations, so they look like players instead of sliding about stiff (owner 2026-11-09: "can u make the
+-- bots smarter"): the same idle, walk and sprint as a player's body, blended by speed and played faster as they run
+-- faster; a dash animation on every dash; for a chaser bot, the knife hold, and a slash when it tags; and at the end
+-- of a match a cheer or a dance for the winners and a slump for the rest (Config.Celebrate).
 -- Played on the server (the bots are the server's), so every screen sees them. Uses the uploaded animation ids in
 -- Config.Anim.
 
@@ -27,6 +28,8 @@ type Set = {
 	slashIndex: number,
 	dashIndex: number,
 	holding: boolean,
+	animator: Animator,
+	party: AnimationTrack?, -- the celebration playing now
 }
 
 local sets: { [Model]: Set } = {}
@@ -35,6 +38,8 @@ local MIN_WEIGHT = 0.0001
 local function animationId(value: unknown): string?
 	if type(value) == "number" and value > 0 then
 		return "rbxassetid://" .. tostring(math.floor(value))
+	elseif type(value) == "string" and value ~= "" then
+		return value
 	end
 	return nil
 end
@@ -80,6 +85,8 @@ function BotAnim.add(bot: Model)
 		slashIndex = 0,
 		dashIndex = 0,
 		holding = false,
+		animator = a,
+		party = nil,
 	}
 	for _, value in N.KnifeSlashAnimationIds do
 		local track = load(a, value, Enum.AnimationPriority.Action2, false)
@@ -132,6 +139,40 @@ function BotAnim.slash(bot: Model)
 			track:Stop(0.2)
 		end
 	end)
+end
+
+-- The match is over: a winner cheers or dances, anyone else slumps. Roblox's own R6 emotes (Config.Celebrate).
+function BotAnim.celebrate(bot: Model, won: boolean)
+	local set = sets[bot]
+	if not set then
+		return
+	end
+	BotAnim.calm(bot)
+	local E = Config.Celebrate
+	local id: string
+	if not won then
+		id = E.SLUMP
+	elseif math.random() < 0.5 then
+		id = E.CHEER
+	else
+		id = E.DANCE[math.random(1, #E.DANCE)]
+	end
+	local track = load(set.animator, id, Enum.AnimationPriority.Action3, true)
+	if track then
+		set.party = track
+		track:Play(0.25)
+	end
+end
+
+-- Back to normal (the round moved the bot somewhere new).
+function BotAnim.calm(bot: Model)
+	local set = sets[bot]
+	local track = if set then set.party else nil
+	if set and track then
+		set.party = nil
+		track:Stop(0.2)
+		track:Destroy()
+	end
 end
 
 -- Blends idle, walk and sprint by speed, and holds the knife while chasing (a few times a second is plenty).

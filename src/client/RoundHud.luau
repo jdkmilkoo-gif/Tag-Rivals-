@@ -177,6 +177,17 @@ local function makeCallout(gui: ScreenGui, y: number, titleSize: number, stackNa
 	return callout :: Callout
 end
 
+-- The call-outs, for the other screens that have something to shout (a bounty, a new level, a finished quest): the
+-- big one in the middle, or with `small` the smaller one under it. They share the round's own, so two never overlap.
+local shared: { middle: Callout?, small: Callout? } = {}
+
+function RoundHud.say(title: string, sub: string?, color: Color3, hold: number, small: boolean?)
+	local callout = if small then shared.small else shared.middle
+	if callout then
+		callout:show(title, sub, color, hold)
+	end
+end
+
 function RoundHud.start()
 	local gui = PlasticUi.screen("TagRivalsRoundHud", 3)
 
@@ -265,6 +276,8 @@ function RoundHud.start()
 	local calloutGui = PlasticUi.screen("TagRivalsCallouts", 5)
 	local middle = makeCallout(calloutGui, 0.5, 72, "Middle")
 	local small = makeCallout(calloutGui, 0.64, 40, "Small")
+	shared.middle = middle
+	shared.small = small
 
 	gui.Parent = player:WaitForChild("PlayerGui")
 	calloutGui.Parent = player:WaitForChild("PlayerGui")

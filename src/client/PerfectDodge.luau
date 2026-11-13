@@ -9,6 +9,8 @@
 --   * dash while it's open (or a frame or two after) and your game tells the server, which checks it and stuns the
 --     chaser (Tagging.perfectDodge): slowed, no dashing, no tagging. You get "PERFECT DODGE!" (RoundHud);
 --   * a chaser who's been dodged sees the world in grey until the stun ends, fading back to colour.
+--   * on the lobby, the practice dummy counts as a chaser while it lunges at you (PerfectDodge.practice), on your
+--     screen only: the same window, the same star, the same words, but nothing is told to the server.
 
 local Lighting = game:GetService("Lighting")
 local Players = game:GetService("Players")
@@ -41,6 +43,20 @@ local star: BillboardGui? = nil
 local starShownAt = -math.huge
 local dodgedAt = -math.huge -- os.clock() of your newest perfect dodge (the star bursts)
 local grey: ColorCorrectionEffect? = nil
+local practice: Model? = nil -- the lobby's practice dummy, while it's lunging at you
+local practiceDodged: (() -> ())? = nil
+local windowListeners: { () -> () } = {}
+
+-- The practice dummy is lunging at you (`body`), or has stopped (nil). `dodged` is called if you perfect-dodge it.
+function PerfectDodge.practice(body: Model?, dodged: (() -> ())?)
+	practice = body
+	practiceDodged = dodged
+end
+
+-- Hears each time the window opens and the gold star shows (Hints).
+function PerfectDodge.onWindow(listener: () -> ())
+	table.insert(windowListeners, listener)
+end
 
 local function bodyOf(who: Instance): Model?
 	if who:IsA("Player") then
@@ -121,14 +137,17 @@ local function step(dt: number)
 	local now = os.clock()
 	local serverNow = Workspace:GetServerTimeNow()
 	local mine = rootOf(player)
-	local playing = Workspace:GetAttribute(RoundRules.ATTR_STATE) == "Match"
-		and player:GetAttribute(RoundRules.ATTR_IN_ROUND) == true
+	local inRound = player:GetAttribute(RoundRules.ATTR_IN_ROUND) == true
+	local inMatch = Workspace:GetAttribute(RoundRules.ATTR_STATE) == "Match"
+		and inRound
 		and MoveRules.role(player:GetAttribute(MoveRules.ATTR_ROLE)) ~= "Chaser"
+	local dummy = if inRound then nil else practice
+	local playing = inMatch or dummy ~= nil
 	local open: Instance? = nil
 	local openGap = math.huge
 	if playing and mine then
 		local seen: { [Instance]: boolean } = {}
-		for _, chaser in chasers(serverNow) do
+		for _, chaser in if dummy then { dummy :: Instance } else chasers(serverNow) do
 			local root = rootOf(chaser)
 			if root then
 				seen[chaser] = true
@@ -169,6 +188,11 @@ local function step(dt: number)
 		local showing = (playing and now - openAt <= O.GRACE or bursting) and head ~= nil
 		if showing and not gui.Enabled then
 			starShownAt = now
+			if not bursting then
+				for _, listener in windowListeners do
+					task.spawn(listener)
+				end
+			end
 		end
 		gui.Enabled = showing
 		gui.Adornee = head
@@ -272,7 +296,19 @@ function PerfectDodge.start()
 		if chaser and os.clock() - openAt <= O.GRACE then
 			openAt = -math.huge
 			dodgedAt = os.clock()
-			TagRemote:FireServer("dodge", chaser)
+			if chaser == practice then
+				-- practice: the same feel, but only on your screen
+				headLabel(player)
+				TagFx.shake(O.SHAKE * 0.6)
+				TagFx.fovPop(O.FOV_KICK * 0.6)
+				TagFx.edgeFlash(PlasticUi.GOLD)
+				local dodged = practiceDodged
+				if dodged then
+					task.spawn(dodged)
+				end
+			else
+				TagRemote:FireServer("dodge", chaser)
+			end
 			local gui = star
 			if gui then
 				-- the star bursts as you dodge

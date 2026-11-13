@@ -1,7 +1,7 @@
 --!strict
 -- The round (design notes, Round flow), over and over:
 --   Waiting       fewer than MIN_PLAYERS: everyone waits on the glass lobby above the circle.
---   Intermission  15 s on the lobby, watching the circle below.
+--   Intermission  30 s on the lobby, watching the circle below (Config.Round.INTERMISSION).
 --   Teleport      2 s: every screen fades to black; in the dark the chaser is picked (never the same one twice running
 --                 when there's a choice), the square is reset to its full 250 a side, the starting speed set
 --                 by the player count, and everyone gets a fresh body: runners spread round the circle, the chaser in
@@ -12,7 +12,8 @@
 --                 (owner 2026-11-10: "make the red let players fall and become tagger"). Phases go by runners left.
 --                 Ends early when no runner is left.
 --   Cleanup       5 s: everyone frozen, no more tagging, the victory screen; then everyone goes back to the lobby.
--- Players joining mid-round wait on the lobby. Studio play-tests fill the round with bots (DevBots).
+-- Players joining mid-round wait on the lobby. Bots fill a round that's short of players (DevBots).
+-- What each moment pays (coins, XP, the bounty, quests, the saved stats) is Rewards' job: this only tells it.
 -- Every screen reads the round from Workspace and player attributes (RoundRules names them) and hears the moments
 -- (the fade, the chaser, a tag, a shrink, the result) on the Round remote.
 
@@ -30,15 +31,17 @@ local History = require(script.Parent.History)
 local Knives = require(script.Parent.Knives)
 local Lobby = require(script.Parent.Lobby)
 local MoveServer = require(script.Parent.MoveServer)
+local Rewards = require(script.Parent.Rewards)
 
 local R = Config.Round
 local S = Config.Shrink
 
--- The Studio bots, when there are any (DevBots).
+-- The bots, when there are any (DevBots).
 export type Bots = {
 	list: () -> { Model },
-	sync: () -> (), -- makes or removes bots until there are as many as the tester wants
+	sync: () -> (), -- makes or removes bots until there are as many as the round wants
 	place: (bot: Model, spot: CFrame) -> (),
+	celebrate: (winner: string) -> (), -- the match is over: the winners among them cheer
 }
 
 export type TagInfo = {
@@ -106,7 +109,7 @@ function Round.isContestant(who: Instance): boolean
 	return table.find(contestants, who) ~= nil
 end
 
--- Every player, and every bot (Studio).
+-- Every player, and every bot.
 local function everyone(): { Instance }
 	local list: { Instance } = {}
 	for _, player in Players:GetPlayers() do
@@ -174,6 +177,20 @@ local function refreshRunners()
 		if Round.roleOf(who) ~= role then
 			setRole(who, role)
 		end
+	end
+end
+
+-- The phase right now (1 to 4).
+local function phaseNow(): number
+	local phase = Workspace:GetAttribute(RoundRules.ATTR_PHASE)
+	return if type(phase) == "number" then phase else 1
+end
+
+-- Tells Rewards a moment of the round. A problem in there must never stop the round itself.
+local function reward(moment: string, ...: any)
+	local ok, problem = pcall((Rewards :: any)[moment], ...)
+	if not ok then
+		warn(`[{Config.GameName}] rewards broke on "{moment}": {problem}`)
 	end
 end
 
@@ -269,6 +286,7 @@ local function fell(who: Instance)
 	falling[who] = stamp
 	who:SetAttribute(MoveRules.ATTR_FALLING, Workspace:GetServerTimeNow())
 	local wasRunner = Round.roleOf(who) ~= "Chaser"
+	local phaseBefore = phaseNow()
 	if wasRunner then
 		setRole(who, "Chaser")
 		Coins.loseStack(who)
@@ -276,6 +294,7 @@ local function fell(who: Instance)
 		refreshRunners()
 	end
 	remote:FireAllClients("fell", { who = who, name = Round.nameOf(who), runner = wasRunner })
+	reward("fell", who, wasRunner, phaseBefore)
 	task.delay(S.FALL_BACK, function()
 		if falling[who] ~= stamp then
 			return
@@ -344,6 +363,7 @@ local function cut(side: number)
 	Coins.cut(side / 2) -- coins on the strip that went fall with it
 	remote:FireAllClients("shrink", shrinkCount, before / 2, side / 2)
 	dropBots(side / 2)
+	reward("shrunk") -- a bounty still running grows
 end
 
 -- A cut with no warning that takes `share` off the side (a tag's, when Config.Shrink.PER_TAG is on).
@@ -371,6 +391,7 @@ function Round.tag(chaser: Instance, runner: Instance, dash: boolean): boolean
 	if MoveRules.safe(runner, Workspace:GetServerTimeNow()) then
 		return false
 	end
+	local phaseBefore = phaseNow()
 	setRole(runner, "Chaser")
 	Coins.loseStack(runner) -- coins: a tagged runner loses their whole speed stack (owner)
 	-- the new chaser stands still for a moment before it can chase (owner: "do the stun before tagging")
@@ -390,6 +411,7 @@ function Round.tag(chaser: Instance, runner: Instance, dash: boolean): boolean
 		at = if root then root.Position else nil,
 	}
 	remote:FireAllClients("tag", info)
+	reward("tagged", chaser, runner, dash, phaseBefore)
 	if S.PER_TAG > 0 then
 		shrink(S.PER_TAG)
 	end
@@ -412,6 +434,7 @@ function Round.dodged(runner: Instance, chaser: Instance)
 		runnerName = Round.nameOf(runner),
 		chaserName = Round.nameOf(chaser),
 	})
+	reward("dodged", runner)
 end
 
 -- A chaser slashed or stabbed (whether or not it lands): every screen draws it. `kind`: "slash" (default) or "stab".
@@ -436,6 +459,7 @@ end
 
 local function endRound()
 	Coins.endMatch()
+	reward("roundCleared")
 	for _, who in contestants do
 		if inGame(who) then
 			backToLobby(who)
@@ -526,6 +550,7 @@ local function teleport(): boolean
 	end
 	refreshRunners()
 	remote:FireAllClients("chaser", chaser, Round.nameOf(chaser))
+	reward("roundStarted", contestants, chaser) -- who's wanted this round
 
 	task.wait(math.max(ends - os.clock(), 0))
 	return true
@@ -539,6 +564,7 @@ local function match(): string
 		setFrozen(who, false)
 	end
 	remote:FireAllClients("go")
+	reward("matchStarted")
 	Coins.beginMatch(#contestants) -- coins start coming in over the match
 	local nextShrink = matchStart + S.EVERY
 	local warned = false -- the next cut's warning is up
@@ -613,6 +639,20 @@ local function cleanup(winner: string)
 		table.remove(top)
 	end
 	remote:FireAllClients("victory", { winner = winner, survivors = survivors, chasers = top })
+	if bots then
+		bots.celebrate(winner)
+	end
+	-- what the round paid each player, and their record, for their own victory screen
+	local ok, payouts = pcall(Rewards.matchEnded, winner, contestants, phaseNow())
+	if ok then
+		for player, payout in payouts do
+			if player.Parent == Players then
+				remote:FireClient(player, "payout", payout)
+			end
+		end
+	else
+		warn(`[{Config.GameName}] rewards broke at the end of the match: {payouts}`)
+	end
 	task.wait(R.CLEANUP)
 end
 
@@ -624,6 +664,9 @@ local function playOnce()
 		setState("Waiting", 0)
 		repeat
 			task.wait(0.5)
+			if bots then
+				bots.sync() -- a lone player gets bots to play with
+			end
 		until enoughPlayers()
 	end
 	setState("Intermission", R.INTERMISSION)
@@ -663,6 +706,12 @@ function Round.start(respawnPlayer: (player: Player) -> (), studioBots: Bots?)
 	end
 	remote = found :: RemoteEvent
 	Arena.manage()
+	local started, problem = pcall(Rewards.start, Round.nameOf, function(kind: string, info: any)
+		remote:FireAllClients(kind, info)
+	end)
+	if not started then
+		warn(`[{Config.GameName}] rewards didn't start: {problem}`)
+	end
 	setState("Waiting", 0)
 	if RunService:IsStudio() then
 		local dev = remotes:FindFirstChild("Dev")

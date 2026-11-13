@@ -246,7 +246,7 @@ Config.Ui = table.freeze({
 -- the match, then cleanup and the victory screen.
 Config.Round = table.freeze({
 	MIN_PLAYERS = 2, -- a round needs a chaser and a runner (Claude's pick)
-	INTERMISSION = 15, -- owner
+	INTERMISSION = 30, -- s (owner 2026-11-13: "make the intermission after a round 30s"; was 8, and 15 before that)
 	TELEPORT = 2, -- owner: the fade to black, the chaser picked in it, everyone spawned, frozen briefly
 	FADE_IN = 0.35, -- s to go black (Claude's pick)
 	FADE_OUT = 0.5, -- s to come back from black, ending as the match starts (Claude's pick)
@@ -272,7 +272,8 @@ Config.Round = table.freeze({
 })
 
 -- The lobby (design notes, Lobby): a big glass ring floating right above the arena, with a see-through floor so
--- everyone waiting watches the round below. Shop booths, flex pedestals and leaderboards come later.
+-- everyone waiting watches the round below. The leaderboards, flex pedestals and practice dummy on it are in
+-- Config.Boards and Config.LobbyExtras; shop booths come with the shop.
 Config.Lobby = table.freeze({
 	HEIGHT = 70, -- studs above the circle's floor (Claude's pick)
 	RADIUS = 48, -- studs (Claude's pick)
@@ -462,16 +463,18 @@ Config.Coins = table.freeze({
 	MODEL_ID = 80640452303536, -- the coin's 3D model (made from the preview, uploaded to the group; a copy sits in
 	-- ServerStorage.Pickups.Coin)
 	-- When they come (Claude's picks): the first one this long after GO!, then one more every EVERY s while there's room.
-	FIRST = 2,
-	EVERY = 1.5,
-	ALIVE_BASE = 6, -- coins on the map at once: this many,
-	ALIVE_PER_PLAYER = 0.5, -- plus this many for each player in the round,
-	ALIVE_MAX = 18, -- never more than this
+	-- Made to come about twice as often, with more on the map at once (owner 2026-11-13: "make coins appear more
+	-- often"; was FIRST 2, EVERY 1.5, ALIVE 6 + 0.5 a player up to 18, SPACING 10).
+	FIRST = 1,
+	EVERY = 0.75,
+	ALIVE_BASE = 10, -- coins on the map at once: this many,
+	ALIVE_PER_PLAYER = 0.8, -- plus this many for each player in the round,
+	ALIVE_MAX = 30, -- never more than this
 	-- Where (owner: "most of them spawn near the dangerous centre so runners can't just loop the edge"; Claude's picks)
 	CENTER_SHARE = 0.65, -- this share land near the middle,
 	CENTER_ZONE = 0.4, -- within this share of the way out to the edge
 	EDGE_GAP = 6, -- studs a new coin stays inside the edge the NEXT cut will leave (so never on a strip about to go)
-	SPACING = 10, -- studs a new coin keeps from the other coins
+	SPACING = 8, -- studs a new coin keeps from the other coins
 	BODY_GAP = 6, -- and from everyone's body
 	-- Picking one up (Claude's picks)
 	RADIUS = 3.2, -- studs across the floor from your body's middle to the coin
@@ -558,6 +561,278 @@ Config.Dev = table.freeze({
 		"Bot Pebble",
 		"Bot Flash",
 	}),
+})
+
+-- Saving (PlayerData): every player's coins, level, stats, quests, codes and hints, kept between visits.
+Config.Data = table.freeze({
+	STORE = "TagRivalsPlayers_v1", -- the DataStore's name (a new name starts everyone afresh: never change it lightly)
+	AUTOSAVE = 90, -- s between saves of each player while they play (and always when they leave)
+	LOCK_STALE = 300, -- s after which another server's hold on a save counts as dead (that server crashed)
+	LOAD_TRIES = 6, -- tries (a few seconds apart) to get a save another server is still holding
+	-- Studio play-tests keep everything in memory only, so a test never touches real saves or leaderboards. Turn on
+	-- to test saving itself (needs Game Settings > Security > "Enable Studio Access to API Services").
+	STUDIO_SAVES = false,
+})
+
+-- Coins and XP from playing (design notes, Coins and economy; XP numbers are Claude's picks).
+Config.Rewards = table.freeze({
+	TAG = 5, -- coins for each tag, paid at once (owner)
+	PHASE1 = 15, -- coins for a runner who lasted past phase 1 before being tagged (owner)
+	SURVIVE = 30, -- coins for a runner who survives to the end (owner)
+	CLUTCH = 50, -- more coins for the last runner standing who survives (owner)
+	XP_ROUND = 10, -- XP for playing a round to its end
+	XP_TAG = 12,
+	XP_PHASE1 = 15,
+	XP_SURVIVE = 40,
+	XP_CLUTCH = 60,
+	XP_DODGE = 8, -- a perfect dodge
+	XP_STAR = 1, -- each coin picked up on the map
+})
+
+-- Levels and titles (design notes, Levels and titles). Claude's picks.
+Config.Levels = table.freeze({
+	MAX = 100,
+	XP_BASE = 100, -- XP from level 1 to 2,
+	XP_STEP = 40, -- and this much more for each level after (level 10 to 11 needs 460)
+	LEVEL_COINS = 20, -- coins for each new level,
+	LEVEL_COINS_STEP = 5, -- plus this for each level you already have (level 10 pays 70)
+	-- the title you wear from each level on (first place on a lobby leaderboard gives its own title instead)
+	TITLES = table.freeze({
+		table.freeze({ level = 1, title = "ROOKIE" }),
+		table.freeze({ level = 5, title = "RUNNER" }),
+		table.freeze({ level = 10, title = "SPRINTER" }),
+		table.freeze({ level = 15, title = "TRICKSTER" }),
+		table.freeze({ level = 20, title = "HUNTER" }),
+		table.freeze({ level = 30, title = "PHANTOM" }),
+		table.freeze({ level = 40, title = "APEX" }),
+		table.freeze({ level = 50, title = "LEGEND" }),
+		table.freeze({ level = 75, title = "MYTHIC" }),
+		table.freeze({ level = 100, title = "RIVAL KING" }),
+	}),
+})
+
+-- Quests (design notes, Coins and economy): 3 random ones in each of Daily, Weekly and Monthly. The quests themselves
+-- are listed in QuestRules.
+Config.Quests = table.freeze({
+	PER_SET = 3,
+	CLOSE_RANGE = 14, -- studs: a dash with a chaser this near counts as "while a chaser is close" (Claude's pick)
+	FREE_REROLLS = 1, -- free rerolls of a daily quest each day (Claude kept one, design notes)
+	REROLL_ROBUX = table.freeze({ daily = 20, weekly = 40, monthly = 90 }), -- owner's prices, shown on the button
+	-- The Robux rerolls' developer product ids. 0: not made yet, and the paid reroll button stays hidden. Make the three
+	-- products on the Creator Dashboard (Monetization > Developer Products) at the prices above and put their ids here.
+	REROLL_PRODUCTS = table.freeze({ daily = 0, weekly = 0, monthly = 0 }),
+})
+
+-- Codes (owner 2026-11-13: "add a codes system"): type one in the CODES box for a reward, once per player. Add a line
+-- to LIST for a new code (capital letters and numbers, no spaces). `expires` (optional) is a date as "2026-12-31":
+-- the code stops working after that day (UTC).
+Config.Codes = table.freeze({
+	MAX_LENGTH = 24,
+	COOLDOWN = 1.5, -- s between two tries
+	LIST = table.freeze({
+		RELEASE = table.freeze({ coins = 250 }),
+		TAGRIVALS = table.freeze({ coins = 100 }),
+	}),
+})
+
+-- The bounty (owner 2026-11-13: "Add a Bounty system"). Each round one runner is WANTED: the one on the longest run of
+-- survived rounds (anyone, when nobody has one). Their bounty shows over their head. The chaser who tags them takes
+-- it; if they survive the match they keep it themselves. It grows with every shrink they outlast. Claude's picks.
+Config.Bounty = table.freeze({
+	MIN_PLAYERS = 4, -- players in the round before there's a bounty (with fewer, everyone knows who's being chased)
+	BASE = 20, -- coins on a wanted runner with no streak
+	PER_STREAK = 15, -- more for each round in a row they've survived
+	PER_SHRINK = 5, -- and it grows this much at every shrink they're still running at
+	MAX = 150,
+	XP = 25, -- XP for collecting it (or keeping it)
+	COLOR = "FFD23A",
+})
+
+-- Coming back every day (launch checklist): a few coins the first time you join each day, more each day in a row
+-- (day 7's keeps repeating; missing a day starts over). Claude's picks.
+Config.Streak = table.freeze({
+	REWARDS = table.freeze({ 25, 40, 60, 80, 100, 125, 200 }),
+})
+
+-- The lobby's leaderboards (design notes, Lobby): six all-time boards on a ring of holograms in the middle of the
+-- lobby, the top SHOW of everyone who's ever played. `stat` is the saved number each one ranks by. Whoever is first
+-- on a board wears the title "#1 <short>" over their head instead of their level's.
+Config.Boards = table.freeze({
+	STORE_PREFIX = "TagRivalsBoard_v1_",
+	REFRESH = 150, -- s between reads of the boards (one board every REFRESH / 6 s, so the reads are spread out)
+	SHOW = 10,
+	RING = 13, -- studs from the lobby's middle to each hologram
+	WIDTH = 12, -- studs
+	HEIGHT = 15,
+	LIFT = 2.5, -- studs its foot floats over the glass
+	LIST = table.freeze({
+		table.freeze({ stat = "tags", name = "MOST TAGS", short = "TAGGER", color = "FF2B4A" }),
+		table.freeze({ stat = "survives", name = "SURVIVOR WINS", short = "SURVIVOR", color = "2EE6FF" }),
+		table.freeze({ stat = "clutches", name = "LAST MAN CLUTCHES", short = "CLUTCH", color = "FFD23A" }),
+		table.freeze({ stat = "bestStreak", name = "LONGEST STREAK", short = "STREAK", color = "7CFF6B" }),
+		table.freeze({ stat = "bestRoundTags", name = "MOST TAGS IN A ROUND", short = "RAMPAGE", color = "FF9F43" }),
+		table.freeze({ stat = "coinsEarned", name = "TOTAL COINS EARNED", short = "TYCOON", color = "B98CFF" }),
+	}),
+})
+
+-- The lobby's extras (design notes, Lobby; launch checklist item 4). Claude's picks for where things stand.
+Config.LobbyExtras = table.freeze({
+	-- Flex pedestals: statues of the top 3 players in this server (by level, then coins), gold, silver and bronze.
+	PEDESTAL_RING = 38, -- studs from the middle
+	PEDESTAL_ANGLE = 90, -- degrees round the lobby where the middle pedestal stands
+	PEDESTAL_GAP = 9, -- studs between pedestals
+	PEDESTAL_HEIGHTS = table.freeze({ 4, 3, 2 }), -- studs: first, second, third
+	PEDESTAL_COLORS = table.freeze({ "FFD23A", "C8CCD8", "D98A4E" }),
+	PEDESTAL_REFRESH = 20, -- s between checks of who's in the top 3
+	-- The practice dummy: it winds up and lunges at whoever is nearest inside its ring every few seconds, so new players
+	-- can learn the perfect dodge without being in a round. Nothing is won or lost.
+	DUMMY_RING = 30, -- studs from the middle
+	DUMMY_ANGLE = 270, -- degrees round the lobby (opposite the pedestals)
+	DUMMY_ZONE = 16, -- studs: its practice ring's radius; it only goes for players inside it
+	DUMMY_EVERY = 3.2, -- s between lunges
+	DUMMY_WINDUP = 0.9, -- s it glows red before it goes
+	DUMMY_SPEED = 22, -- studs/s of its lunge: slower than a real chaser, so the star shows for about a third of a second
+	DUMMY_MIN_GAP = 14, -- studs: it only lunges from at least this far (so the star has time to show)
+	DUMMY_LUNGE_TIME = 1.6, -- s a lunge lasts at the most
+	DUMMY_REACH = 5.2, -- studs: it "tags" you this close (as a chaser's reach)
+})
+
+-- Bots in live servers (launch checklist item 2: never leave a player alone; owner 2026-11-13: "give bots actual
+-- clothes nd avatars"). When a server has fewer than FILL_TO players, bots join so rounds can start; each real player
+-- who joins takes a bot's place. They wear real Roblox clothes, hair and hats (all free items made by Roblox, checked
+-- 2026-11-13), play like the Studio test bots, and wear a small BOT tag over their name. Tags on bots pay coins and
+-- count for quests, but never for the leaderboards. Studio play-tests still use the TEST BOTS panel's count.
+Config.LiveBots = table.freeze({
+	ENABLED = true,
+	-- players and bots together a server is topped up to: with this many real players there are no bots (owner
+	-- 2026-11-13: "bots should stop filling up server at like 15 players")
+	FILL_TO = 15,
+	SHOW_TAG = true, -- the small BOT tag over their heads (off: they look like players; be careful, players dislike it)
+	NAMES = table.freeze({
+		"Blossom", "Comet", "Pixel", "Nova", "Turbo", "Echo", "Sprout", "Zap", "Mochi", "Rocket", "Pebble", "Flash",
+		"Jinx", "Bolt", "Waffle", "Lumi", "Dash", "Kiwi", "Rumble", "Sky", "Noodle", "Blitz", "Maple", "Onyx",
+		"Pogo", "Ziggy", "Clover", "Fizz", "Ace", "Biscuit",
+	}),
+	SKIN = table.freeze({ "F2D2B6", "E0AC69", "C68642", "8D5524", "FFDBAC", "A9714B", "5C3A21" }),
+	SHIRTS = table.freeze({
+		607785314, -- ROBLOX Jacket
+		398633584, -- Denim Jacket with White Hoodie
+		144076358, -- Blue and Black Motorcycle Shirt
+		398634295, -- Pastel Starburst Top with Gray Jacket
+		382538059, -- Green Jersey
+		398635081, -- Blue Plaid Shirt
+		4047886060, -- Purple and Teal Top
+		4047884939, -- My Favorite Pizza Shirt
+		4047884046, -- Guitar Tee with Black Jacket
+		382537702, -- Teal Shirt
+		144076436, -- Grey Striped Shirt with Denim Jacket
+		382537085, -- I <3 Pizza Shirt
+	}),
+	PANTS = table.freeze({
+		398633812, -- Black Jeans with White Shoes
+		398635338, -- Ripped Skater Pants
+		398634487, -- Beautiful You Jeans
+		144076760, -- Dark Green Jeans
+		382538503, -- Black Jeans with Sneakers
+		382537569, -- Black Jeans
+		382537950, -- Jean Shorts with White Shoes
+		382537806, -- Jean Shorts
+	}),
+	HAIR = table.freeze({
+		63690008, -- Pal Hair
+		451221329, -- True Blue Hair
+		451220849, -- Lavender Updo
+		376524487, -- Blonde Spiked Hair
+		376526888, -- Straight Blonde Hair
+		1103003368, -- Orange Beanie with Black Hair
+		2956239660, -- Belle Of Belfast Long Red Hair
+		3814474927, -- Cool Side Shave
+		3814476174, -- Colorful Braids
+		9243992729, -- Short and Sleek - Black
+		9244021842, -- Side Part - Black
+		7193448258, -- Wavy Middle Part - Brown
+		7193442167, -- Pony Tail - Black
+		9174355709, -- Sideswept Dreads - Black
+		9244095135, -- Pony Tail - Blonde
+		7193450455, -- Curly Afro - Black
+		9244038785, -- Surfer - Red
+		7193419595, -- Side Part - Brown
+	}),
+	HATS = table.freeze({
+		607702162, -- Roblox Baseball Cap
+		417457461, -- ROBLOX 'R' Baseball Cap
+		2646473721, -- Roblox Visor
+		607700713, -- Roblox Logo Visor
+		48474313, -- Red Roblox Cap
+	}),
+	HAT_CHANCE = 0.3, -- share of bots that wear a hat as well as hair
+})
+
+-- Sounds (design notes: Round flow, Shrink shake and sound, Star pickup feel). Licensed sound effects from Roblox's
+-- own library (Pro Sound Effects and APM, free in any game) and sounds built into Roblox; all checked to load
+-- 2026-11-13. Nobody has listened to the mix yet: tune VOLUME and swap ids here after a playtest.
+Config.Sound = table.freeze({
+	VOLUME = 0.8, -- everything, times this
+	TAG = "rbxassetid://9119872797", -- a tag near you: a deep synth thud ("Synth Whomps 8"), no screech
+	TAG_PITCH = 0.85,
+	SHRINK_THUD = "rbxassetid://9119874551", -- shrinks 1-3: a sub-bass thud ("Synth Whomps 33"), pitched down
+	SHRINK_SLAM = "rbxassetid://9125484367", -- shrinks 4-8: a big reverberant boom ("Deep Hits Big Reverberant Booms")
+	SHRINK_CRUMBLE = "rbxassetid://9125879362", -- the strip breaking away ("Rock Scrape Deep Clunky Slides")
+	LAST_MAN = "rbxassetid://9043340902", -- last man standing: a bass drop ("AMBIENT BOOM 04")
+	HEARTBEAT = "rbxassetid://9119872772", -- the last man's heartbeat: two soft low thumps a beat ("Synth Whomps 9")
+	HEARTBEAT_EVERY = 0.62, -- s between beats (fast and heavy)
+	TICK = "rbxasset://sounds/clickfast.wav", -- the shrink countdown and the last 10 s
+	DASH = "rbxassetid://9120972321", -- your dash ("Wood Whoosh Slicing Air Quick Swings 4")
+	SLASH = "rbxassetid://9120972444", -- a knife slash near you ("Wood Whoosh Slicing Air Quick Swings 1")
+	DODGE = "rbxassetid://9125648149", -- a perfect dodge ("Magic Zoom Up Sharp Tubular Whoosh Fast Hiss")
+	FALL = "rbxassetid://9126229255", -- falling off a cut strip ("Whoosh By Fast Airy Swooshing Whipping Thuds")
+	COIN = "rbxasset://sounds/electronicpingshort.wav", -- a coin: a bright ping, a note higher for each within COIN_CHAIN s
+	COIN_THUD = "rbxasset://sounds/bass.wav", -- with a soft bass thud under it
+	COIN_CHAIN = 3, -- s (design notes)
+	COIN_NOTES = table.freeze({ 1, 1.122, 1.26, 1.335, 1.498, 1.682, 1.888, 2 }), -- do re mi fa sol la ti do
+	CLICK = "rbxasset://sounds/switch.wav", -- pressing a button
+	OPEN = "rbxasset://sounds/button.wav", -- a panel opening
+	REWARD = "rbxasset://sounds/electronicpingshort.wav", -- coins paid to you: two quick rising pings
+	VICTORY = "rbxasset://sounds/victory.wav", -- your side won
+	DEFEAT = "rbxassetid://9119872977", -- your side lost: a low whomp ("Synth Whomps 10")
+	GO = "rbxassetid://9125805579", -- the match starts ("Rising Whoosh Hissing Build Up")
+	LEVEL_UP = "rbxasset://sounds/victory.wav",
+	HEAR_RANGE = 90, -- studs from your camera within which other players' tags and slashes are heard
+})
+
+-- The speed screen effect (design notes, Speed screen effect): red and cyan colour split and soft dark edges at the
+-- screen's border, on your screen only. The design's "above about 18, peaks around 26" was written when a sprint was
+-- 22; every speed went up since (a runner sprints at 25 now), so it starts just above a runner's sprint and peaks at
+-- a last runner's (Claude's picks), and a dash still gives a short strong burst.
+Config.SpeedFx = table.freeze({
+	START = 26.5, -- studs/s it fades in above
+	PEAK = 35, -- and is strongest at
+	MAX = 0.65, -- never stronger than this (owner: capped at 65% so it never blinds)
+	DASH = 0.6, -- a dash's burst,
+	DASH_BACK = 0.3, -- easing back in this many s (owner)
+	EDGE = 0.16, -- share of the screen's width each coloured edge covers at full strength
+	RED = "FF2B4A",
+	CYAN = "2EE6FF",
+})
+
+-- The first minute (launch checklist items 4 and 5): what a new player is shown, once.
+Config.Hints = table.freeze({
+	DODGE_TIMES = 3, -- "DASH NOW!" shows beside the gold star the first this many times its window opens
+	SHOW = 4, -- s each of the three hints stays (SPACE = DASH, RED = CHASERS, the star = DASH NOW)
+})
+
+-- Cleanup (design notes, Round flow: "Survivors celebrate, infected collapse or emote"): Roblox's own R6 emotes.
+Config.Celebrate = table.freeze({
+	CHEER = "rbxassetid://129423030", -- the winners
+	DANCE = table.freeze({ "rbxassetid://182435998", "rbxassetid://182436842", "rbxassetid://182436935" }),
+	SLUMP = "rbxassetid://178130996", -- the losers sit down
+})
+
+-- The camera's follow lag in a dash (design notes, Camera: "lags a few studs during a dash, then springs back").
+Config.DashLag = table.freeze({
+	STUDS = 2.2, -- how far behind the view falls at the dash's peak (Claude's pick)
+	RISE = 0.06, -- s to fall behind
+	BACK = 0.35, -- s to spring back
 })
 
 return Config

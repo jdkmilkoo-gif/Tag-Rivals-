@@ -4,7 +4,8 @@
 -- back, and a sideways dash tilts the view 2-3 degrees the other way. On every step the view shakes a little (owner
 -- 2026-11-09: "on every step the camers sublty shakes"): a quick dip and a tiny roll toward the foot that landed,
 -- stronger the faster you go (CharacterAnim.onStep). Roblox's own camera still does the following; this runs right
--- after it each frame. The lead ahead of you and the follow lag come later.
+-- after it each frame. In a dash the view also falls a couple of studs behind you and springs back
+-- (Config.DashLag; design notes, Camera: "lags a few studs during a dash, then springs back").
 
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local RunService = game:GetService("RunService")
@@ -15,11 +16,13 @@ local CharacterAnim = require(script.Parent.CharacterAnim)
 local MoveController = require(script.Parent.MoveController)
 
 local C = Config.Camera
+local G = Config.DashLag
 
 local CameraFeel = {}
 
 local baseFov = C.FOV_STAND
 local dashSide = 0 -- -1 the dash went left on screen, 1 right, 0 straight
+local dashWay = Vector3.zero -- the flat way the newest dash went
 local stepAt = -math.huge
 local stepStrength = 0
 local stepSide = 1
@@ -68,6 +71,14 @@ local function update(dt: number)
 		camera.CFrame *= CFrame.Angles(0, 0, math.rad(roll))
 	end
 
+	-- the dash lag: the view falls behind along the dash, then springs back to you
+	if age >= 0 and age < G.RISE + G.BACK and dashWay.Magnitude > 0.5 then
+		local behind = if age < G.RISE
+			then smooth(age / G.RISE)
+			else 1 - smooth((age - G.RISE) / G.BACK)
+		camera.CFrame -= dashWay * (G.STUDS * behind)
+	end
+
 	-- the step shake: down and back up over STEP_TIME, rolling a touch toward the foot that landed
 	local stepAge = os.clock() - stepAt
 	if stepAge >= 0 and stepAge < C.STEP_TIME then
@@ -78,6 +89,8 @@ end
 
 function CameraFeel.start()
 	MoveController.onDash(function(direction: Vector3)
+		local flat = Vector3.new(direction.X, 0, direction.Z)
+		dashWay = if flat.Magnitude > 1e-3 then flat.Unit else Vector3.zero
 		local camera = Workspace.CurrentCamera
 		if not camera then
 			dashSide = 0

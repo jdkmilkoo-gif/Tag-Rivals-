@@ -87,6 +87,12 @@ spawnPlayer = function(player: Player)
 	end
 
 	character.Name = player.Name
+	-- every screen draws the name tags itself (NameTags): name, level and title, in the game's own style
+	local shown = character:FindFirstChildOfClass("Humanoid")
+	if shown then
+		shown.DisplayDistanceType = Enum.HumanoidDisplayDistanceType.None
+		shown.HealthDisplayType = Enum.HumanoidHealthDisplayType.AlwaysOff
+	end
 	for _, child in StarterPlayer.StarterCharacterScripts:GetChildren() do
 		child:Clone().Parent = character
 	end
@@ -123,6 +129,11 @@ spawnPlayer = function(player: Player)
 			onGone()
 		end
 	end)
+end
+
+-- A player's avatar, once it's been fetched (the lobby's pedestals make statues from it).
+function Spawner.descriptionOf(player: Player): HumanoidDescription?
+	return descriptions[player]
 end
 
 -- A fresh body for one player now (a fall, a new round).

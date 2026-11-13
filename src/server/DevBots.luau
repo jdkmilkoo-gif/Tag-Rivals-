@@ -1,8 +1,15 @@
 --!strict
--- Studio-only test bots, so one person can play a whole round in a Studio play-test (never in a live game). Each is a
--- plain R6 body in Workspace.TagBots that the round treats like a player: it wears the knife, gets a role, spawns
--- with everyone, runs with the real animations (BotAnim), and screens can tag it. A test starts with
--- Config.Dev.STUDIO_BOTS bots; the TEST BOTS panel (DevBotsPanel) changes how many, 0 to BOTS_MAX, at once.
+-- The bots. Each is an R6 body in Workspace.TagBots that the round treats like a player: it wears the knife, gets a
+-- role, spawns with everyone, runs with the real animations (BotAnim), and screens can tag it.
+--   * In a live game they top a quiet server up to Config.LiveBots.FILL_TO (design notes: bots fill empty servers), so
+--     nobody ever joins a server with no round to play: one player gets 14 bots, 15 players get none (owner
+--     2026-11-13: "bots should stop filling up server at like 15 players"). They come and go between rounds only,
+--     never in the middle of one.
+--   * In a Studio play-test they're the tester's: a test starts with Config.Dev.STUDIO_BOTS bots, and the TEST BOTS
+--     panel (DevBotsPanel) changes how many, 0 to BOTS_MAX, at once.
+--   * They look like players (owner 2026-11-13: "give bots actual clothes nd avatars"): each wears one of Roblox's own
+--     free shirts, pants and hair styles, sometimes a cap, on a random skin tone, with a name from
+--     Config.LiveBots.NAMES and a low level. Name tags mark them BOT unless Config.LiveBots.SHOW_TAG is off.
 -- They play like players (owner 2026-11-09: "can u make the bots smarter, they can use dashes"), a little slower so
 -- a person can still win:
 --   * every bot has the players' dash: 2 charges, each refilling in 1.5 s, the same 10 studs in 0.15 s, with the same
@@ -24,6 +31,7 @@ local Workspace = game:GetService("Workspace")
 
 local Config = require(ReplicatedStorage.Shared.Config)
 local MoveRules = require(ReplicatedStorage.Shared.MoveRules)
+local ProgressRules = require(ReplicatedStorage.Shared.ProgressRules)
 local RoundRules = require(ReplicatedStorage.Shared.RoundRules)
 local BotAnim = require(script.Parent.BotAnim)
 
@@ -31,8 +39,11 @@ local A = Config.Arena
 local T = Config.Tag
 local D = Config.Dash
 local B = Config.Bots
+local V = Config.LiveBots
 
 local DevBots = {}
+
+local studio = RunService:IsStudio()
 
 type Brain = {
 	charge: number, -- dash charges, as MoveRules counts them
@@ -63,32 +74,77 @@ end
 
 local BODY_COLORS = { "FF8AE6", "2EE6FF", "FFD23A", "7CFF6B", "B98CFF", "FF9F43" }
 
-local function makeBot(name: string, index: number): Model?
+local function oneOf<T>(list: { T }): T
+	return list[rng:NextInteger(1, #list)]
+end
+
+-- A bot's look. `clothes`: one of Roblox's own shirts and pants; `extras`: hair too, and sometimes a cap.
+local function describe(clothes: boolean, extras: boolean): HumanoidDescription
 	local description = Instance.new("HumanoidDescription")
-	local color = Color3.fromHex(BODY_COLORS[(index - 1) % #BODY_COLORS + 1])
-	description.HeadColor = Color3.fromHex("F2D2B6")
-	description.TorsoColor = color
-	description.LeftArmColor = Color3.fromHex("F2D2B6")
-	description.RightArmColor = Color3.fromHex("F2D2B6")
-	description.LeftLegColor = color:Lerp(Color3.new(0, 0, 0), 0.4)
-	description.RightLegColor = color:Lerp(Color3.new(0, 0, 0), 0.4)
-	local ok, body = pcall(function()
-		return Players:CreateHumanoidModelFromDescription(description, Enum.HumanoidRigType.R6)
-	end)
-	if not ok or not body then
-		warn(`[{Config.GameName}] could not make a test bot: {body}`)
+	local skin = Color3.fromHex(oneOf(V.SKIN))
+	description.HeadColor = skin
+	description.LeftArmColor = skin
+	description.RightArmColor = skin
+	if clothes then
+		description.TorsoColor = skin
+		description.LeftLegColor = skin
+		description.RightLegColor = skin
+		description.Shirt = oneOf(V.SHIRTS)
+		description.Pants = oneOf(V.PANTS)
+	else
+		-- no clothes to be had: a plain bright body, as the test bots used to be
+		local color = Color3.fromHex(oneOf(BODY_COLORS))
+		description.TorsoColor = color
+		description.LeftLegColor = color:Lerp(Color3.new(0, 0, 0), 0.4)
+		description.RightLegColor = color:Lerp(Color3.new(0, 0, 0), 0.4)
+	end
+	if extras then
+		description.HairAccessory = tostring(oneOf(V.HAIR))
+		if rng:NextNumber() < V.HAT_CHANCE then
+			description.HatAccessory = tostring(oneOf(V.HATS))
+		end
+	end
+	return description
+end
+
+-- Building a body loads its clothes from the web, which can fail (an outage, an item taken down): try the whole
+-- look, then just the clothes, then a plain body.
+local function build(): Model?
+	local problem: any = nil
+	for _, look in { { true, true }, { true, false }, { false, false } } do
+		local description = describe(look[1], look[2])
+		local ok, body = pcall(function()
+			return Players:CreateHumanoidModelFromDescription(description, Enum.HumanoidRigType.R6)
+		end)
+		if ok and body then
+			return body
+		end
+		problem = body
+	end
+	warn(`[{Config.GameName}] could not make a bot: {problem}`)
+	return nil
+end
+
+local function makeBot(name: string): Model?
+	local model = build()
+	if not model then
 		return nil
 	end
-	local model = body :: Model
 	model.Name = name
 	model:SetAttribute(RoundRules.ATTR_BOT, true)
 	model:SetAttribute(RoundRules.ATTR_NAME, name)
 	model:SetAttribute(MoveRules.ATTR_ROLE, "Runner")
 	model:SetAttribute(MoveRules.ATTR_DASH_COUNT, 0)
+	-- what name tags read: a low level and its title, and a survival streak like a player's (the bounty looks at it)
+	local level = rng:NextInteger(1, 14)
+	model:SetAttribute(ProgressRules.ATTR_LEVEL, level)
+	model:SetAttribute(ProgressRules.ATTR_TITLE, ProgressRules.title(level))
+	model:SetAttribute(ProgressRules.ATTR_STREAK, 0)
 	local humanoid = model:FindFirstChildOfClass("Humanoid")
 	if humanoid then
 		humanoid.DisplayName = name
-		humanoid.DisplayDistanceType = Enum.HumanoidDisplayDistanceType.Viewer
+		-- name tags are drawn by every screen itself (NameTags), not by Roblox
+		humanoid.DisplayDistanceType = Enum.HumanoidDisplayDistanceType.None
 		humanoid.HealthDisplayType = Enum.HumanoidHealthDisplayType.AlwaysOff
 		humanoid.UseJumpPower = false
 		humanoid.JumpHeight = 0
@@ -113,37 +169,55 @@ function DevBots.list(): { Model }
 	return list
 end
 
--- A name no bot has yet.
-local function freeName(): (string, number)
+-- A name no bot has yet, picked at random so every server's bots are different.
+local function freeName(): string
 	local taken: { [string]: boolean } = {}
 	for _, bot in DevBots.list() do
 		taken[bot.Name] = true
 	end
-	for i, name in Config.Dev.BOT_NAMES do
+	local free: { string } = {}
+	for _, name in V.NAMES do
 		if not taken[name] then
-			return name, i
+			table.insert(free, name)
 		end
 	end
-	local i = #Config.Dev.BOT_NAMES + 1
+	if #free > 0 then
+		return oneOf(free)
+	end
+	local i = 1
 	while taken["Bot " .. i] do
 		i += 1
 	end
-	return "Bot " .. i, i
+	return "Bot " .. i
+end
+
+-- How many bots there should be right now: in a Studio test, as many as the tester asked for; in a live game, enough
+-- to top the server up to Config.LiveBots.FILL_TO (none in an empty server, none once enough players are in).
+local function target(): number
+	if studio then
+		return wanted
+	end
+	local players = #Players:GetPlayers()
+	if players == 0 then
+		return 0
+	end
+	return math.clamp(V.FILL_TO - players, 0, V.FILL_TO)
 end
 
 local syncing = false
 
--- Makes or removes bots until there are as many as wanted. Spare bots that aren't playing go first; one in the round
--- goes too if it must (the round carries on without it).
+-- Makes or removes bots until there are as many as there should be. Spare bots that aren't playing go first. In a
+-- Studio test one in the round goes too if it must (the round carries on without it); in a live game a bot in the
+-- round always finishes it.
 function DevBots.sync()
 	local holder = folder
 	if not holder or syncing then
 		return
 	end
 	syncing = true
-	while #DevBots.list() < wanted do
-		local name, index = freeName()
-		local bot = makeBot(name, index)
+	local count = target()
+	while #DevBots.list() < count do
+		local bot = makeBot(freeName())
 		if not bot then
 			break
 		end
@@ -153,6 +227,7 @@ function DevBots.sync()
 			root:SetNetworkOwner(nil)
 		end
 		BotAnim.add(bot)
+		count = target() -- building takes a moment: someone may have joined or left
 	end
 	local list = DevBots.list()
 	table.sort(list, function(a, b)
@@ -163,17 +238,30 @@ function DevBots.sync()
 		end
 		return a.Name > b.Name
 	end)
-	for i = 1, #list - wanted do
-		list[i]:Destroy()
+	for i = 1, #list - count do
+		if studio or list[i]:GetAttribute(RoundRules.ATTR_IN_ROUND) ~= true then
+			list[i]:Destroy()
+		end
 	end
 	syncing = false
 end
 
--- How many bots the tester wants (0 to BOTS_MAX); bots are made or removed at once.
+-- How many bots the tester wants (0 to BOTS_MAX); bots are made or removed at once. Studio only.
 function DevBots.setWanted(count: number)
 	wanted = math.clamp(math.floor(count), 0, Config.Dev.BOTS_MAX)
 	Workspace:SetAttribute(RoundRules.ATTR_STUDIO_BOTS, wanted)
 	task.spawn(DevBots.sync)
+end
+
+-- The match is over (`winner`: "Runners", "Chasers" or "None"): the bots on the winning side cheer, the rest slump,
+-- like the players do (Celebrate). It ends when the round puts them back on the lobby.
+function DevBots.celebrate(winner: string)
+	for _, bot in DevBots.list() do
+		if bot:GetAttribute(RoundRules.ATTR_IN_ROUND) == true and winner ~= "None" then
+			local chaser = MoveRules.role(bot:GetAttribute(MoveRules.ATTR_ROLE)) == "Chaser"
+			BotAnim.celebrate(bot, chaser == (winner == "Chasers"))
+		end
+	end
 end
 
 local function brainOf(bot: Model): Brain
@@ -200,6 +288,7 @@ end
 
 function DevBots.place(bot: Model, spot: CFrame)
 	bot:PivotTo(spot)
+	BotAnim.calm(bot)
 	local root = bot:FindFirstChild("HumanoidRootPart") :: BasePart?
 	if root then
 		root.AssemblyLinearVelocity = Vector3.zero
@@ -538,13 +627,18 @@ local function think(bot: Model, brain: Brain, everyone: { Body }, dt: number)
 	humanoid:Move(direction)
 end
 
--- Starts the bots (Studio only; does nothing in a live game). `tag` and `slash` are the round's.
+-- Starts the bots: the tester's in a Studio play-test, the fill-in bots in a live game (when Config.LiveBots.ENABLED).
+-- Gives back whether there are bots at all. `tag`, `slash` and `dodge` are the round's.
 function DevBots.start(
 	tag: (chaser: Instance, runner: Instance, dash: boolean) -> boolean,
 	slash: (chaser: Instance) -> (),
 	dodge: (runner: Instance, chaser: Instance) -> boolean
 ): boolean
-	if not RunService:IsStudio() or Config.Dev.BOTS_MAX <= 0 then
+	if studio then
+		if Config.Dev.BOTS_MAX <= 0 then
+			return false
+		end
+	elseif not V.ENABLED or V.FILL_TO <= 1 then
 		return false
 	end
 	onTag, onSlash, onDodge = tag, slash, dodge
@@ -552,14 +646,16 @@ function DevBots.start(
 	holder.Name = "TagBots"
 	holder.Parent = Workspace
 	folder = holder
-	Workspace:SetAttribute(RoundRules.ATTR_STUDIO_BOTS, wanted)
-	-- the TEST BOTS panel's - and + (Studio only)
-	local dev = ReplicatedStorage:WaitForChild("Remotes"):WaitForChild("Dev") :: RemoteEvent
-	dev.OnServerEvent:Connect(function(_, action, value)
-		if action == "bots" and type(value) == "number" and value == value then
-			DevBots.setWanted(value)
-		end
-	end)
+	if studio then
+		Workspace:SetAttribute(RoundRules.ATTR_STUDIO_BOTS, wanted)
+		-- the TEST BOTS panel's - and + (Studio only: a live game never listens to this)
+		local dev = ReplicatedStorage:WaitForChild("Remotes"):WaitForChild("Dev") :: RemoteEvent
+		dev.OnServerEvent:Connect(function(_, action, value)
+			if action == "bots" and type(value) == "number" and value == value then
+				DevBots.setWanted(value)
+			end
+		end)
+	end
 	-- seconds each bot has gone without thinking (it thinks every other frame, below)
 	local owed: { [Model]: number } = {}
 	holder.ChildRemoved:Connect(function(child)
@@ -571,7 +667,8 @@ function DevBots.start(
 	BotAnim.start()
 	-- decisions: a dashing bot every frame (it holds the dash's speed and way); the rest take turns, half of them a
 	-- frame (a body keeps walking the way it was last sent). A Studio test runs the server and every bot on the same
-	-- computer as your screen, so this keeps the frame rate up (owner 2026-11-09: "a consistent 60 fps").
+	-- computer as your screen, so this keeps the frame rate up (owner 2026-11-09: "a consistent 60 fps"); in a live
+	-- game it keeps the server light.
 	local turn = 0
 	RunService.Heartbeat:Connect(function(dt: number)
 		turn += 1

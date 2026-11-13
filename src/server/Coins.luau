@@ -11,7 +11,7 @@
 --     also checks every body itself (Studio bots, and anyone whose word didn't arrive).
 --   * A tagged runner loses their whole stack (owner); coins already picked up stay theirs.
 --   * A cut drops the coins on the strip that went; the match's end clears the rest.
--- Coins aren't saved yet (that's the saving step).
+-- A coin picked up is the player's for good at once (Progress: their saved coins, a little XP, quests).
 
 local Players = game:GetService("Players")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
@@ -25,6 +25,7 @@ local MoveRules = require(ReplicatedStorage.Shared.MoveRules)
 local RoundRules = require(ReplicatedStorage.Shared.RoundRules)
 local Arena = require(script.Parent.Arena)
 local History = require(script.Parent.History)
+local Progress = require(script.Parent.Progress)
 
 local C = Config.Coins
 
@@ -94,6 +95,11 @@ local function award(id: number, who: Instance)
 	-- the word first, then the coin goes from the list (screens draw the pick-up rather than a plain vanish)
 	remote:FireAllClients("take", id, who, coin.spot)
 	remove(id)
+	-- theirs for good (a bot is quietly ignored); the coin's own pop on screen already shows the +2
+	Progress.addCoins(who, C.VALUE, "STAR", true)
+	Progress.addXp(who, Config.Rewards.XP_STAR)
+	Progress.addStat(who, "stars", 1)
+	Progress.event(who, "star")
 end
 
 local function spawnOne()

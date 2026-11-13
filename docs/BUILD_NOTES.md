@@ -5,7 +5,7 @@ Everything built so far, in plain words, with where it lives. The owner's design
 today. Every number is in `src/shared/Config.luau`. Numbers marked "Claude's pick" are starting points to tune in
 playtests.
 
-Last updated: 2026-11-10.
+Last updated: 2026-11-13.
 
 ## Setup
 
@@ -20,8 +20,9 @@ Last updated: 2026-11-10.
   with shrinks"). Every round starts at the full 250 whatever the player count, and the shrinks make it smaller (it
   used to be a circle sized by players: 100 + 15 each, then 120 + 18). (`src/server/Arena.luau`)
 - **The lobby:** a big glass disc (96 studs across) floating 70 studs above the square, with a glowing cyan rim and an
-  invisible wall round its edge. Its floor is see-through, so everyone waiting watches the round below. Shop booths,
-  flex pedestals and leaderboards come later. (`src/server/Lobby.luau`, Claude's picks for size and height)
+  invisible wall round its edge. Its floor is see-through, so everyone waiting watches the round below. On it: six
+  leaderboards, three pedestals and a practice dummy (see The lobby's show pieces). Shop booths come with the shop.
+  (`src/server/Lobby.luau`, Claude's picks for size and height)
 - When the game runs, the place's square baseplate and spawn pad are removed; they stay in the place for building.
 - The grey floor you see doesn't collide; you stand on an invisible copy under it. Both are resized at the round's
   start and at each shrink's cut, so whoever is still on the cut strip has nothing under them and falls (see The round).
@@ -55,6 +56,12 @@ Last updated: 2026-11-10.
   respawns 2 s after dying. (`src/server/Spawner.luau`)
 - Streaming is off (`Workspace.StreamingEnabled`), so every screen always has the whole small map.
 - No jumping, ever.
+- **Name tags** (`src/client/NameTags.luau`; design notes: "Each player's name, level and title visible"): Roblox's own
+  names over heads are off; every screen draws its own in the game's font. The name is white, or red for a chaser in
+  the round. Under it, small and gold, "LV 12  HUNTER" (whoever tops a leaderboard wears "#1 TAGGER" instead). A bot's
+  line starts with a small blue BOT. The wanted runner has a gold pulsing WANTED plate with their bounty, seen through
+  everything from any distance. You don't see your own name, only your own WANTED plate. Tags further than 120 studs
+  aren't drawn; what a tag says is checked 5 times a second and only changed when it's different.
 
 ## Movement (`src/client/MoveController.luau`, `src/server/MoveServer.luau`, `src/shared/MoveRules.luau`)
 
@@ -150,13 +157,14 @@ Built 2026-11-09 (step 1 of the plan). Over and over:
 
 | Step | Time | What happens |
 | --- | --- | --- |
-| Waiting | until 2 players | Everyone waits on the lobby. The timer says WAITING FOR PLAYERS. |
-| Intermission | 15 s | On the lobby, watching the circle below. |
+| Waiting | until 2 players | Everyone waits on the lobby. The timer says WAITING FOR PLAYERS. In a live game bots join a lone player within a few seconds (see Bots), so this is short. |
+| Intermission | 30 s | On the lobby, watching the circle below. (Owner 2026-11-13: "make the intermission after a round 30s"; was 8 s, and 15 before that.) |
 | Teleport | 2 s | Every screen fades to black. In the dark the chaser is picked (never the same one twice in a row when there's a choice), the circle is sized, the starting speed set, and everyone gets a fresh body: runners spread evenly round the circle (78% of the way out, a little random), the chaser in the middle with the knife in hand. Your screen says YOU ARE THE CHASER! or RUN! and the chaser's name. Everyone is frozen until GO!. |
 | Match | 2 min | Tagged runners become chasers. Ends early when no runner is left. (Owner 2026-11-09: "change the game form 90 seconds to 2 minutes"; was 90 s.) |
 | Cleanup | 5 s | Everyone frozen, no more tagging, the victory screen. Then everyone goes back up to the lobby. |
 
-- Players who join mid-round wait on the lobby. If every chaser leaves, a runner is made the chaser; if fewer than 2
+- Players who join mid-round wait on the lobby (owner 2026-11-11 kept this, with a shorter break and the YOU'RE IN
+  NEXT ROUND! countdown, see Screens). If every chaser leaves, a runner is made the chaser; if fewer than 2
   are left, the round ends ("ROUND OVER").
 - **Phases** go by runners left (owner): phase 2 once a third of the starting runners are tagged, phase 3 at two
   thirds, Last Man Standing with 1 left. The timer's bar is slate grey, amber, orange (Claude's pick), then crimson.
@@ -173,7 +181,7 @@ Built 2026-11-09 (step 1 of the plan). Over and over:
   "Decrease the strength of the shrinks. The map should shrink every 30 seconds. like 10%"). Tags no longer shrink it
   (they took 6% each), and the 20% shrink 25 s in is gone (owner: "get rid of the 25% shrink"). Never under 50 studs a
   side. A shrink shakes the camera: a sharp snap, then a rumble that fades over 0.8 s, stronger every shrink (0.25 at
-  the first, +0.08 each, at most 1.2). Sounds come with the sound step.
+  the first, +0.08 each, at most 1.2). Each shrink has its sound (see Sounds).
 - **The warning and the cut** (`src/client/ShrinkFx.luau`; owner 2026-11-09: "make the game warn 3 seconds before the
   map shrinks. and whatever part of the map that shrinks that area should be red. and change the shrinking function as
   just like cutting off a that part of the map"). Numbers in `Config.Shrink`:
@@ -321,13 +329,15 @@ with the coin from the 'Tag Rivals Coin' preview). Numbers in `Config.Coins`.
   and a turning dashed ring on the floor. Model: `ServerStorage > Pickups > Coin` (uploaded to the group as Model
   80640452303536; if the place copy is missing, the server loads the uploaded one). Its pictures are uploaded too (ids
   in `Config.Coins.IMAGES`; sources in the project files under `tag-rivals/coin/`).
-- **They come in over time** (owner: "should spawn over time"): the first 2 s after GO!, then one every 1.5 s while
-  fewer than 6 + half a coin per player are on the map (at most 18; 8 with 4 players, 18 with 30). New ones pop in
-  with a spin, a light beam and a floor ring. Claude's picks.
+- **They come in over time** (owner: "should spawn over time"), and about twice as often as at first (owner
+  2026-11-13: "make coins appear more often"): the first 1 s after GO!, then one every 0.75 s while fewer than 10 +
+  0.8 a player are on the map (at most 30; 13 with 4 players, 22 with 15). It was the first after 2 s, one every
+  1.5 s, 6 + half a coin a player up to 18. New ones pop in with a spin, a light beam and a floor ring. Claude's
+  picks.
 - **Where:** 65% land near the middle (owner: "most of them spawn near the dangerous centre so runners can't just loop
   the edge"), the rest anywhere, always 6 studs inside the edge the **next** cut will leave (so never on a strip
   that's about to go), 10 studs from other coins and 6 from anyone's body. A cut drops the coins on the strip that
-  went; the match's end clears the rest.
+  went; the match's end clears the rest. A new coin keeps 8 studs from the others (was 10).
 - **Picking one up:** touch it (within 3.2 studs across the floor) to get **+2 coins and +0.2 top speed** (the speed
   stack, `Stars`: at most +10, SPEED UP! shows each rise). Runners and chasers both can. Your own screen says when you
   touch one, so it's instant; the server checks you really were near it (where it saw you in the last 0.6 s, 6 studs of
@@ -342,11 +352,127 @@ with the coin from the 'Tag Rivals Coin' preview). Numbers in `Config.Coins`.
   built once and reused, moved all at once each frame, the particles are a few shared emitters, and coins more than
   150 studs from your camera drop their dust and twinkles; their glow, floor light and ring change 20 times a second.
   Turning the coins' pictures off in a Studio test with 29 bots made no difference to the frame rate.
-- Coins aren't saved yet: each round's count starts at 0 (that's the saving step).
+- **Saved at once:** each coin picked up goes straight into your saved coins (see Saving), with 1 XP, and counts
+  for the coin quests and the TOTAL COINS EARNED board. The round's own counter still starts at 0 each round.
 
-## Studio bots (`src/server/DevBots.luau`, `src/server/BotAnim.luau`, Studio only)
+## Saving (`src/server/PlayerData.luau`)
 
-A Studio play-test adds 3 test bots, so one person can play a whole round. The **TEST BOTS panel** at the top left of
+Built 2026-11-13 (step 2 of the plan). What every player keeps between visits: coins, XP, the saved stats, quests,
+used codes, the daily streak, first-minute hints, bought rerolls. Numbers in `Config.Data`.
+
+- One save a player (DataStore `TagRivalsPlayers_v1`, key `u_<user id>`). It loads when they join, saves every 90 s
+  (each player on their own beat, so they never all save together), when they leave, and when the server shuts down.
+- **Only one server holds a save at a time.** The save carries which server has it; a player who hops servers faster
+  than the old one saves waits a few seconds for it (6 tries). A server that crashed counts as gone after 5 minutes.
+  This is what stops coins being copied by quick rejoining.
+- Every call is tried again with a growing wait. **A save that can't be loaded is never replaced by an empty one:**
+  the player is asked to join again instead.
+- Anything missing in an old save (a new field) gets its starting value when it loads.
+- **Studio play-tests keep everything in memory only** (`STUDIO_SAVES = false`), so a test never touches real saves or
+  the leaderboards. A Studio test always starts you as a new player.
+- The rest of the server only reads and changes the copy in memory (`PlayerData.get`).
+
+## Coins, XP, levels and titles (`src/server/Progress.luau`, `src/shared/ProgressRules.luau`)
+
+The one place that changes what a player owns; nothing on a screen can set a number. Numbers in `Config.Rewards`,
+`Config.Levels`, `Config.Streak` (XP and level numbers are Claude's picks).
+
+- Each player's coins, level, XP into the level, title and survival streak are on their Player (attributes `Coins`,
+  `Level`, `Xp`, `XpNeed`, `Title`, `SurviveStreak`), which is what the wallet, name tags and pedestals read.
+- **Levels:** 100 XP from level 1 to 2, then 40 more each level (level 10 to 11 takes 460), up to level 100. Each new
+  level pays coins (20 + 5 a level: level 10 pays 70) and shouts LEVEL 10! on your screen.
+- **Titles:** ROOKIE (1), RUNNER (5), SPRINTER (10), TRICKSTER (15), HUNTER (20), PHANTOM (30), APEX (40), LEGEND (50),
+  MYTHIC (75), RIVAL KING (100). First place on a lobby leaderboard wears "#1 TAGGER" (and the like) instead.
+- **The daily bonus** (launch checklist): the first join of each day (UTC) pays 25, 40, 60, 80, 100, 125, then 200
+  coins for each day in a row; missing a day starts over. DAILY BONUS! shows a few seconds after you join.
+- **The saved stats:** tags, survives, clutches, streak, bestStreak, bestRoundTags, coinsEarned, rounds, dodges,
+  stars, bounties.
+- **The Progress remote** carries the moments to your screen ("coins", "level", "quests", "questDone", "code",
+  "streak") and your requests back ("quests", "claim", "reroll", "code", "hint"). Every request is checked for its
+  kind and what it carries, and held to 3 a second of each kind for each player.
+
+## What a round pays (`src/server/Rewards.luau`)
+
+The round tells Rewards each moment and it does the rest. A mistake in there can never stop the round.
+
+| For | Coins | XP |
+| --- | --- | --- |
+| Each tag (paid at once) | 5 | 12 |
+| A runner who lasted past phase 1 before being tagged | 15 | 15 |
+| A runner who survives the match | 30 | 40 |
+| ...as the last runner standing | +50 | +60 |
+| A perfect dodge | | 8 |
+| Playing a round to its end | | 10 |
+| Each coin picked up on the map | 2 | 1 |
+| The bounty | see below | 25 |
+
+- **Tags on bots** pay coins and count for quests, but never for the leaderboards (tags, most tags in a round).
+- **The survival streak:** rounds in a row you survived. A tag, a fall, or leaving mid-match as a runner ends it.
+- A round that falls apart (everyone left) pays what was already earned and nothing more.
+- **Your round's card** (`src/client/PayoutCard.luau`; design notes: "Post-match record board"): with the end screen a
+  card slides in from the left: SURVIVED +30, 2 TAGS +10, BOUNTY +35, COINS PICKED UP +6, each line popping in with a
+  tick, the total counting up, then your XP and your record (how long you lasted, your tags and when the first came,
+  or that you were the first chaser). It leaves with the end screen.
+- **For the owner's dashboard:** a brand-new player's first minutes go to Roblox's funnel chart (Creator Dashboard >
+  Analytics > Funnels): Joined, First round started, First dash, First round finished, Second round finished. It shows
+  where new players drop out. Not sent from Studio.
+
+## The bounty (`src/server/Bounty.luau`; owner 2026-11-13: "Add a Bounty system")
+
+Numbers in `Config.Bounty` (Claude's picks).
+
+- Each round with 4 or more in it, **one runner is WANTED**: the one on the longest survival streak (picked at random
+  among the runners when it's a tie or nobody has one). A bot can be wanted.
+- **Worth:** 20 coins, +15 for each round of their streak, **+5 at every shrink they're still running at**, at most 150.
+- A gold WANTED plate with the amount floats over their head on every screen, seen through everything.
+- **The chaser who tags them takes it.** If they **survive the match they keep it themselves.** If they fall off a cut
+  strip or leave, nobody gets it.
+- Shouted on screen (`src/client/BountyHud.luau`): just after GO!, YOU'RE WANTED! to them and WANTED: NAME to everyone
+  else; YOUR BOUNTY: 30 at each shrink (their chasers see it too); BOUNTY CLAIMED! or BOUNTY LOST at its end.
+
+## Quests (`src/server/Quests.luau`, `src/shared/QuestRules.luau`, `src/client/QuestPanel.luau`)
+
+Design notes: 3 random quests in each of Daily, Weekly and Monthly.
+
+- **The quests** are listed in `QuestRules`: 8 daily (100 to 250 coins), 7 weekly (800 to 1,200), 5 monthly (3,500
+  to 5,000). The owner's are in (ADRENALINE JUNKIE, PURE FLAWLESS, IRON LUNGS, DANGER DANCER, THE INFECTION, LAST ONE
+  STANDING); the rest are Claude's picks in the same spirit (tags, coins picked up, rounds played, perfect dodges,
+  lasting past phase 1, dash tags, bounties).
+- A set is dealt afresh when its day, week (Monday) or month turns over (UTC), also for someone playing through it.
+- A finished quest waits for its **CLAIM** button, then pays its coins and a tenth of that in XP.
+- **Reroll** swaps an unfinished quest for another: one free daily reroll a day. The Robux rerolls (owner's prices:
+  20, 40, 90) are built but **hidden until their product ids are in `Config.Quests.REROLL_PRODUCTS`**. A bought reroll
+  that can't be used at once is kept on the save, and no purchase is ever paid out twice.
+- **The QUESTS panel:** three tabs, when the set refreshes, and a row a quest: what to do, a bar that fills, the
+  reward, and one button (CLAIM!, REROLL FREE, REROLL x2, REROLL R$20 or CLAIMED). Rows slide in one after another,
+  bars fill smoothly, a claimed row punches. A red badge on the QUESTS button counts rewards waiting.
+- QUEST DONE: NAME is shouted on your screen the moment one is finished.
+
+## Codes (`src/server/Codes.luau`, `src/client/CodesPanel.luau`; owner 2026-11-13: "add a codes system")
+
+- Type a code into the CODES box, press REDEEM (or Enter), get its coins, **once per player** on any server (used
+  codes are on the save).
+- **The codes are in `Config.Codes.LIST`**: add a line for a new one, with its coins and an optional last day
+  (`expires = "2026-12-31"`). To start with (Claude's picks, change or remove them): **RELEASE** (250 coins) and
+  **TAGRIVALS** (100 coins).
+- What's typed is tidied to capitals and numbers, so "release" and "Release " work. One try every 1.5 s.
+- The answer pops under the box: green "+250 COINS!", or red for a code that doesn't exist, has run out or was used.
+
+## Bots (`src/server/DevBots.luau`, `src/server/BotAnim.luau`)
+
+**In a live game** (launch checklist: never leave a player alone; numbers in `Config.LiveBots`): bots top a quiet
+server up to **15 players and bots together** (owner 2026-11-13: "bots should stop filling up server at like 15
+players"). One player gets 14 bots, 10 players get 5, 15 or more get none. They come and go between rounds only, never
+in the middle of one. `ENABLED = false` turns them off.
+
+**They look like players** (owner 2026-11-13: "give bots actual clothes nd avatars"): each wears one of 12 shirts, 8
+pants and 18 hair styles, 3 in 10 a cap as well, on one of 7 skin tones, all free items made by Roblox. If Roblox
+can't load a look, the bot gets the clothes without the hair, then a plain body. Names come from a list of 30
+(Blossom, Comet, Pixel...), a different pick each server. Each has a level from 1 to 14 and its title, and a small
+blue **BOT** over its name (`SHOW_TAG`; turning it off makes them pass for players, which players dislike when they
+find out).
+
+**In a Studio play-test** they're the tester's: a test adds 3 test bots, so one person can play a whole round. The **TEST BOTS panel** at the top left of
 the screen, under Roblox's own buttons (under the tag feed when that's on the left, on a phone; clear of the phone
 thumbstick) (Studio only, `src/client/DevBotsPanel.luau`; owner 2026-11-09: "make a setting so that i choose how many bots
 i want") has - and + buttons for 0 to 29 bots (a full 30-player server; owner: "max players is 30, so let me add 29
@@ -367,7 +493,9 @@ The bots play like players (owner 2026-11-09: "can u make the bots smarter, they
   run to cut it off (where it'll be, not where it is), dash in once the dash and its 7.5 reach cover the gap, and slash
   and tag whoever they reach.
 - **Animations** (`BotAnim`): the same idle, walk and sprint as players, blended by speed and sped up with it; a dash
-  animation on every dash; the knife hold while chasing and a slash on every tag.
+  animation on every dash; the knife hold while chasing and a slash on every tag; a cheer, a dance or a slump at the
+  end of a match.
+- Bots pick coins up, can be wanted, and keep a survival streak like players, but earn and save nothing.
 - In a Studio test with 12 bots, a round went from 12 runners to 2 in about 17 s, with the bots dashing about once a
   second between them.
 
@@ -404,7 +532,8 @@ The bots play like players (owner 2026-11-09: "can u make the bots smarter, they
     Roblox's own turning (AutoRotate) is off while this steers, and Roblox's shift lock isn't used.
 - **Looking ahead** (`src/client/CameraLead.luau`): built (the view slid up to 3.5 studs the way you run), now **off**
   (`Config.Camera.LEAD = 0`) because the owner wants "only the player turning the camera can affect the camera".
-- Not built yet: the camera lagging behind in a dash.
+- **Dash lag** (design notes: "lags a few studs during a dash, then springs back"): in a dash the view falls 2.2 studs
+  behind you along the dash in 0.06 s and springs back over 0.35 s (`Config.DashLag`, Claude's picks).
 
 ## Screens (UI)
 
@@ -420,6 +549,27 @@ take the Speed box"). **Everything moves** (owner: "make the Uis All animated", 
 - **The timer** (`RoundHud.luau`): top middle. A status line (INTERMISSION, THE SWARM IS LOOSE!, LAST MAN STANDING,
   ROUND OVER) with a glint, the big countdown on a striped indigo plate, and a thin bar under it that fills as time
   runs in the phase's colour. It bobs and leans, a new phase pops it, the last 10 s pulse red.
+- **YOU'RE IN NEXT ROUND!** (`NextRound.luau`; owner 2026-11-11, from the launch checklist: "Keep waiting, shorter
+  break"): first under the timer, on the lobby only. Gold words with a glint over a blue plastic tag, "STARTS IN
+  1:12". It shows during the break, and while a round is on that you're not in (you joined late); it hides during
+  the end screen (it would sit on it) and while the game waits for players. The time counts to the next fade to
+  black: during the break it's the timer's own clock; during a match it counts as if the match runs its full 2
+  minutes, so it drops when a match ends early. It pops in, bobs, the words rock, the tag ticks every second and the
+  last 5 s pulse gold. Layout and look are Claude's picks. Not tried in Studio yet (no place was open on 2026-11-11).
+- **The wallet** (`Wallet.luau`): on the lobby, top left under Roblox's buttons. A card with your level on a gold
+  tile, your title, the XP bar and your coins (they count up when you earn some and the card punches), and under it
+  the **QUESTS** and **CODES** buttons. Coins you're paid pop up as gold words beside it ("+5 TAG"; beside the coin
+  counter in a round). It slides away to the left when your round starts. LEVEL 10!, DAILY BONUS! and QUEST DONE use
+  the round's call-outs (`RoundHud.say`), small ones mid-chase so they never hide the game.
+- **Buttons and panels** (`UiKit.luau`): the plastic button grows under the pointer, sinks when pressed and springs
+  back; a panel is a big striped card over a dimmed game that pops in, fits any screen, and closes on its X or a tap
+  outside. One panel at a time.
+- **First-minute hints** (`Hints.luau`; launch checklist): shown once ever to each player (remembered on the save).
+  SPACE = DASH (DASH BUTTON = DASH on a phone) as your first match starts, RED = CHASERS. RUN! right after if you're a
+  runner, and DASH NOW! under the gold star the first 3 times a perfect dodge's window opens.
+- **The speed effect** (`SpeedFx.luau`; design notes, Speed screen effect): the screen's left edge glows red and its
+  right edge cyan as you go faster than a runner's sprint (from 26.5 studs/s, full at 35), with a burst on every dash
+  that eases back in 0.3 s. Never stronger than 65%. Two plain frames, switched off when there's nothing to see.
 - **The runner counter** (`RunnerCounter.luau`; owner 2026-11-10: "add a RUnner counter"): just right of the timer, for
   everyone while a round is on (it slides down at the teleport and back up after the end screen). A cyan RUNNERS line
   level with the timer's status line, a striped indigo plate like the timer's with a little cyan runner whose arms and
@@ -475,7 +625,7 @@ Checked in Studio's device simulator (iPhone 7, Galaxy A06, iPad) and on PC, wit
 - **One plan:** each fixed piece (timer, runner counter, coin counter, Dash button, dash bars, tag feed) says where it
   sits every frame, and the others keep clear of it: 8 pixels between pieces, 12 from the screen's sides. A phone is a
   screen whose short side is under 480 pixels. Roblox's safe area (notches) was already kept clear.
-- **Pop-ups stack:** the shrink countdown, the big call-outs (TAGGED!, GO!, DODGED!), the small ones (+1 TAG) and SPEED
+- **Pop-ups stack:** YOU'RE IN NEXT ROUND! (lobby only), the shrink countdown, the big call-outs (TAGGED!, GO!, DODGED!), the small ones (+1 TAG) and SPEED
   UP! (low, just above the dash bars) go down from under the timer in that order and never cover each other, the timer
   or the dash bars. On a phone they're drawn at 85% of the (already smaller) HUD. A long one (YOU ARE THE CHASER!)
   shrinks to stay clear of the tag feed and the coin counter, and so does one squeezed in under the others; one with no
@@ -498,6 +648,57 @@ Checked in Studio's device simulator (iPhone 7, Galaxy A06, iPad) and on PC, wit
 - **Landscape only:** a phone can't turn the game to portrait.
 - Each HUD script costs well under 0.1 ms a frame (Studio's script profiler); every test held 60 FPS.
 
+## The lobby's show pieces
+
+Built 2026-11-13. The server makes the parts and publishes the numbers; every screen draws on them itself and switches
+all of it off while you're in a round (you can't read it from down there).
+
+- **Leaderboards** (`src/server/Leaderboards.luau`, `src/client/LobbyBoards.luau`; `Config.Boards`): six glass boards
+  in a ring in the lobby's middle, facing out: MOST TAGS, SURVIVOR WINS, LAST MAN CLUTCHES, LONGEST STREAK, MOST TAGS
+  IN A ROUND, TOTAL COINS EARNED. Each shows the top 10 of everyone who's ever played; gold, silver and bronze ranks,
+  your own row in cyan, rows pop when they change. The players in your server are mixed in with their numbers as they
+  are right now, so a tag shows at once. Each board is read from Roblox's storage in turn (one every 25 s), numbers
+  are written when they've gone up and when a player leaves, and they only ever go up. A Studio test ranks only the
+  players in the test.
+- **Pedestals** (`src/server/LobbyExtras.luau`): gold, silver and bronze, with statues of the top 3 players in the
+  server (by level, then coins) in their own avatars, their names and levels over them. Checked every 20 s.
+- **The practice dummy** (`src/client/PracticeDummy.luau`; launch checklist): a red and grey dummy with a knife, in
+  a red ring. Step in and every few seconds it glows red, then lunges at you; the gold star shows exactly as in a
+  round, and dashing while it shows gives PERFECT DODGE! (2 DODGES IN A ROW!). Too late is TOO LATE!, too early is
+  TOO EARLY!. All of it happens on your own screen only: nothing is won, the server does nothing, and nobody is
+  bothered by someone else's dummy. Numbers in `Config.LobbyExtras` (Claude's picks).
+
+## Sounds (`src/client/Sounds.luau`; owner 2026-11-13: "add sounds for everything, and dont make them annyoing")
+
+Every sound plays on your own screen, from `Config.Sound` (free licensed sounds from Roblox's library and sounds
+built into Roblox). **Nobody has listened to the mix yet:** tune `Config.Sound.VOLUME` and the ids after a playtest.
+
+- **So nothing grates** (owner: "if its the same souns again, adjuts the pitch or temp"):
+  - the same sound never plays the same way twice running: each time its pitch and speed move a step (up to 3 to 10%
+    either way, by sound), never the same step as last time;
+  - a sound that keeps coming gets quieter each time (down to 45%), and one asked for again within a few hundredths
+    of a second is skipped;
+  - other players' tags, slashes, dodges and falls are only heard within 90 studs, quieter with distance.
+- **The round:** a whoosh at the fade, a low sting if you're the chaser, a rising whoosh at GO!, a thud on a tag (and
+  a low whomp when it's you), slashes, your dash (and a soft click with no charge left), the perfect dodge, a fall,
+  a soft rise on SPEED UP!, the win and the loss.
+- **The shrink:** 3, 2, 1 ticks each a step higher; shrinks 1 to 3 thud lower each time, later ones slam, and the
+  strip crumbles away.
+- **The clock:** the match's last 10 s tick, rising as it runs out; the break's last 3 s tick.
+- **Last man standing:** a bass drop for everyone in the round, then the last runner hears a heartbeat (lub-dub).
+- **Coins:** each one you pick up is a note higher while you keep picking them up within 3 s (do re mi...), with a
+  soft thud under it. Coins paid to you chime up the scale; a level, a finished quest, the daily bonus, a code and
+  your round's card each have their own little run of notes.
+- **Buttons:** a soft tick under the pointer, a click when pressed, a pop when a panel opens or closes, a low thud
+  for a button that can't be pressed.
+- Each sound is fetched when the game starts, so the first tag isn't silent; 3 copies of each can overlap.
+
+## The end of a match (`src/client/Celebrate.luau`, `BotAnim`)
+
+Design notes: "Survivors celebrate, infected collapse or emote". While everyone is held still, the winning side
+cheers or dances and the rest sit down (Roblox's own R6 emotes, `Config.Celebrate`). It stops when the round sends
+everyone back to the lobby. Bots do the same.
+
 ## Frame rate (owner 2026-11-09: "can u adjust the game so its has a consistent 60 fps")
 
 Roblox draws at most 60 frames a second, so the aim is every frame on time. What was changed, from measuring a Studio
@@ -517,6 +718,10 @@ test with 29 bots (Roblox's script profiler and frame times):
   about 3 frames in 100 took a little longer (20 to 30 ms). A catch of about 0.2 s was seen once as the first shrink
   warning appeared. The shrink's parts are now built when the game starts and reused, and a 29-bot test showed no
   catch at either warning or cut (worst frames 24 to 31 ms).
+- **Built 2026-11-13 with the same rules** (not measured in Studio yet): the wallet, panels, payout card, hints and
+  speed effect build their pieces once and only move them; a closed panel or a hidden card does nothing each frame;
+  the lobby's boards and plates are switched off in a round; name tags only change their words when what they say
+  changes; sounds reuse 3 copies each; the practice dummy does nothing when you're in a round or far from it.
 - **Testing it:** Studio's own frame rate is lower than a real game's, because the server and the bots run on your
   computer too. A short slow patch now and then in Studio can also be Studio itself (saving, plugins); a published
   game with real players is the fair test.
@@ -540,6 +745,15 @@ test with 29 bots (Roblox's script profiler and frame times):
 - The live game's server size is 30 players (set 2026-11-09, owner: "max players is 30"; it was 50).
 - A playtest with friends: tagging between real players (Chrono's part of the check) can only be tried with 2+
   people. Studio tests used the bots.
+- **Everything built 2026-11-13 still needs its first Studio test** (saving, rewards, quests, codes, the bounty, live
+  bots, the lobby's show pieces, sounds, the wallet and panels, the payout card, hints, the speed effect). It was
+  written and read through twice, but the PC couldn't be reached to run it.
+- **Game Settings > Security > "Enable Studio Access to API Services"** only if you want to test saving in Studio
+  (and set `Config.Data.STUDIO_SAVES = true` for that test). The live game saves without it.
+- **The Robux rerolls:** make three developer products (20, 40 and 90 Robux) on the Creator Dashboard and put their
+  ids in `Config.Quests.REROLL_PRODUCTS`. Until then that button stays hidden.
+- **Codes:** RELEASE (250) and TAGRIVALS (100) are Claude's picks; change them in `Config.Codes.LIST`.
+- **Listen to the sounds** and say which are too loud, too quiet or wrong.
 
 ## Notes for later
 
@@ -547,10 +761,12 @@ test with 29 bots (Roblox's script profiler and frame times):
   rays) weren't in the project files, so the coin's white pictures and Roblox's fire stand in. Once they're uploaded,
   swap the texture ids at the top of `uploads/knives/make_bloomblade_fx.luau` (run it again) and `src/client/TagFx.luau`.
   Not built yet: the slash arcs and light rays (Beams), the charm swinging, the finisher.
-- **Sounds:** the tag thud, the shrink sounds by shrink count, the shrink countdown's tick, and the coin pick-up (a
-  thud and a chime one note higher for each coin within 3 s) wait for the sound step.
+- **Music:** there's none yet (lobby, match, last man). Sounds are in; see Sounds.
+- **More maps** (owner asked 2026-11-13): Claude advised one map at launch. Variants of the square (a round modifier
+  such as Tiny Arena or Ice Floor, or a different floor and sky) are cheap to add after launch as weekly updates.
 
 ## Not built yet
 
-saving coins, quests, shop, the lobby's booths, pedestals and leaderboards, levels and titles, names over heads, the
-record board, celebrations at cleanup, sounds, and the speed screen effect.
+The shop and everything it sells (cosmetics: knife skins, trails, afterimage colours, tag effects, emotes, crates,
+lucky deals; left out on purpose, owner 2026-11-13), the lobby's shop booths, music, the Robux rerolls' products,
+golden star drops and round modifiers (ideas in the design notes).
